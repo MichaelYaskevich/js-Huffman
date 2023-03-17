@@ -1,19 +1,17 @@
 let arg = process.argv;
 let fs = require('fs');
-let arrayOfFrequency = {};
-let tree = new Array();
+let dict_of_frequency = {};
 
 function read(inFile) {
     try {
-        inText = fs.readFileSync(inFile, "utf-8");
-        return inText;
+        return fs.readFileSync(inFile, "utf-8");
     }
     catch (e) {
         return undefined;
     }
 }
 
-function HuffmanObject(letter, freq, code, parent = null, used = false) {
+function HuffmanObject(letter, freq, code = "", parent = null, used = false) {
     this.letter = letter;
     this.freq = freq;
     this.code = code;
@@ -21,30 +19,31 @@ function HuffmanObject(letter, freq, code, parent = null, used = false) {
     this.used = used;
 }
 
-function MakeArrayOfFrequency(inText) {
-    for (let i = 0; i < inText.length; i++) {
-        if (arrayOfFrequency[inText.charAt(i)] != undefined) {
-            arrayOfFrequency[inText.charAt(i)]++;
+function makeDictOfFrequency(text) {
+    let dict_of_frequency = {};
+    for (let i = 0; i < text.length; i++) {
+        if (dict_of_frequency[text.charAt(i)] != undefined) {
+            dict_of_frequency[text.charAt(i)]++;
         } else {
-            arrayOfFrequency[inText.charAt(i)] = 1;
+            dict_of_frequency[text.charAt(i)] = 1;
         }
     }
-    return arrayOfFrequency
+    return dict_of_frequency
 }
 
-function MakeCodeForTreeElements(parentIndex, tree, treeLen) {
+function makeCodeForTreeElements(parent_index, tree, tree_len) {
     var first = true;
-    for (let j = 0; j < treeLen; j++) {
-        if (tree[j].parent == parentIndex) {
+    for (let j = 0; j < tree_len; j++) {
+        if (tree[j].parent == parent_index) {
             if (first) {
                 first = false;
-                if (parentIndex != null)
-                    tree[j].code = tree[parentIndex].code + "0";
-                tree = MakeCodeForTreeElements(j, tree, treeLen);
+                if (parent_index != null)
+                    tree[j].code = tree[parent_index].code + "0";
+                tree = makeCodeForTreeElements(j, tree, tree_len);
             }
             else {
-                tree[j].code = tree[parentIndex].code + "1";
-                tree = MakeCodeForTreeElements(j, tree, treeLen);
+                tree[j].code = tree[parent_index].code + "1";
+                tree = makeCodeForTreeElements(j, tree, tree_len);
                 break;
             }
         }
@@ -52,117 +51,117 @@ function MakeCodeForTreeElements(parentIndex, tree, treeLen) {
     return tree;
 }
 
-function MakeTable(tree, treeLength) {
+function makeLetter2CodeTable(tree, tree_length) {
     var str = "";
-    for (let i = 0; i < treeLength; i++) {
+    for (let i = 0; i < tree_length; i++) {
         str += tree[i].letter + ":" + tree[i].code + "\n";
     }
     return str.substring(0, str.length-1);
 }
 
-function MakeDictionary(str, mode) {
+function makeDictionary(str, mode) {
     var pairs = str.split('\n');
     var pairsLen = pairs.length;
     var dict = {};
     for (let i = 0; i < pairsLen; i++) {
-        var key = pairs[i].split(':')[0];
-        var value = pairs[i].split(':')[1];
+        var letter = pairs[i].split(':')[0];
+        var code = pairs[i].split(':')[1];
         if (mode == "code")
-            dict[key] = value;
+            dict[letter] = code;
         else if (mode == "decode")
-            dict[value] = key;
+            dict[code] = letter;
     }
     return dict;
 }
 
-function MakeTree(treeLen, inLen, tree) {
-    for (let i = 0; i < treeLen - 1; i++) {
-        minIndex1 = -1;
-        minIndex2 = -1;
-        minFreq1 = inLen;
-        minFreq2 = inLen;
+function makeTree(leaves_count, min_freq, tree) {
+    // Получает дерево из листьев и выстраивает по ним полноценное дерево.
+    for (let i = 0; i < leaves_count - 1; i++) {
+        let min_index1 = -1;
+        let min_index2 = -1;
+        let min_freq1 = min_freq;
+        let min_freq2 = min_freq;
         for (let j = 0; j < tree.length; j++) {
-            if (tree[j].used == false && tree[j].freq <= minFreq1) {
-                minIndex2 = minIndex1;
-                minFreq2 = minFreq1;
-                minIndex1 = j;
-                minFreq1 = tree[j].freq;
+            if (tree[j].used == false && tree[j].freq <= min_freq1) {
+                min_index2 = min_index1;
+                min_freq2 = min_freq1;
+                min_index1 = j;
+                min_freq1 = tree[j].freq;
             }
-            else if (tree[j].used == false && tree[j].freq <= minFreq2) {
-                minIndex2 = j;
-                minFreq2 = tree[j].freq;
+            else if (tree[j].used == false && tree[j].freq <= min_freq2) {
+                min_index2 = j;
+                min_freq2 = tree[j].freq;
             }
         }
-        var newInstance = new HuffmanObject(
-            tree[minIndex1].letter + tree[minIndex2].letter, tree[minIndex1].freq + tree[minIndex2].freq, "");
-        tree.push(newInstance);
-        tree[minIndex1].used = true;
-        tree[minIndex2].used = true;
-        tree[minIndex1].parent = tree.length - 1;
-        tree[minIndex2].parent = tree.length - 1;
+        tree.push(new HuffmanObject(
+            tree[min_index1].letter + tree[min_index2].letter, 
+            tree[min_index1].freq + tree[min_index2].freq));
+        tree[min_index1].used = true;
+        tree[min_index2].used = true;
+        tree[min_index1].parent = tree.length - 1;
+        tree[min_index2].parent = tree.length - 1;
     }
     return tree;
 }
 
-function code(inFile, table) {
-    let inText = read(inFile);
-    if (inText == undefined || inText == "")
+function code(text_file, table_file) {
+    let text = read(text_file);
+    if (text == undefined || text == "")
         return undefined;
 
-    arrayOfFrequency = MakeArrayOfFrequency(inText);
-    for (key in arrayOfFrequency) {
-        var newInstance = new HuffmanObject(key, arrayOfFrequency[key], "");
-        tree.push(newInstance);
+    dict_of_frequency = makeDictOfFrequency(text);
+    let tree = Array()
+    for (key in dict_of_frequency) {
+        var new_instance = new HuffmanObject(key, dict_of_frequency[key], "");
+        tree.push(new_instance);
     }
 
-    let inLen = inText.length;
-    let treeLen = tree.length;
-    let oldTreeLen = treeLen;
+    let text_len = text.length;
+    let letters_count = tree.length;
 
-    tree = MakeTree(treeLen, inLen, tree);
-    treeLen = tree.length;
-    tree = MakeCodeForTreeElements(null, tree, treeLen);
-    let str = MakeTable(tree, oldTreeLen);
-    fs.writeFileSync(table, str);
-    let resultStr = "";
-    let dictionary = MakeDictionary(str, "code");
-    for (let i = 0; i < inLen; i++) {
-        resultStr += dictionary[inText.charAt(i)];
+    tree = makeTree(tree.length, text_len, tree);
+    tree = makeCodeForTreeElements(null, tree, tree.length);
+    let table_as_str = makeLetter2CodeTable(tree, letters_count);
+    fs.writeFileSync(table_file, table_as_str);
+    let result = "";
+    let dictionary = makeDictionary(table_as_str, "code");
+    for (let i = 0; i < text_len; i++) {
+        result += dictionary[text.charAt(i)];
     }
 
-    return resultStr;
+    return result;
 }
 
-function decode(inFile, table) {
-    let inText = read(inFile);
-    let str = read(table);
-    if (inText == undefined || str == undefined ||
-        inText == "" || str == "")
+function decode(text_file, table_file) {
+    let text = read(text_file);
+    let str = read(table_file);
+    if (text == undefined || str == undefined ||
+        text == "" || str == "")
         return undefined;
-    let dictionary = MakeDictionary(str, "decode");
-    let maxKeyLength = -1;
+    let dictionary = makeDictionary(str, "decode");
+    let max_key_length = -1;
     for (key in dictionary) {
-        if (key.length > maxKeyLength)
-            maxKeyLength = key.length
+        if (key.length > max_key_length)
+            max_key_length = key.length
     }
-    let inLen = inText.length;
-    let resultStr = "";
+    let text_len = text.length;
+    let result = "";
     let code = "";
-    for (let i = 0; i < inLen; i++) {
-        code += inText.charAt(i);
-        if (code.length > maxKeyLength) {
+    for (let i = 0; i < text_len; i++) {
+        code += text.charAt(i);
+        if (code.length > max_key_length) {
             console.log("It is impossible to decode your file.");
             break;
         }
         if (dictionary.hasOwnProperty(code)) {
-            resultStr += dictionary[code];
+            result += dictionary[code];
             code = "";
         }
     }
-    return resultStr;
+    return result;
 }
 
-function GetNeededFunction(mode) {
+function getNeededFunction(mode) {
     if (mode == "code") {
         return code;
     }
@@ -174,11 +173,11 @@ function GetNeededFunction(mode) {
     return undefined;
 }
 
-var fun = GetNeededFunction(arg[2]);
+var fun = getNeededFunction(arg[2]);
 if (fun != undefined) {
-    let resultToWrite = fun(arg[3], arg[4]);
-    if (resultToWrite != undefined)
-        fs.writeFileSync(arg[5], resultToWrite);
+    let result = fun(arg[3], arg[4]);
+    if (result != undefined)
+        fs.writeFileSync(arg[5], result);
     else
         console.log("file is empty or doesn't exist");
 }
