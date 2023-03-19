@@ -1,6 +1,6 @@
 let arg = process.argv;
 let fs = require('fs');
-let dict_of_frequency = {};
+let freq2Strs = {};
 
 function read(inFile) {
     try {
@@ -11,44 +11,48 @@ function read(inFile) {
     }
 }
 
-function HuffmanObject(letter, freq, code = "", parent = null, used = false) {
+function HuffmanObject(letter, freq, code = "") {
     this.letter = letter;
     this.freq = freq;
     this.code = code;
-    this.parent = parent;
-    this.used = used;
+    this.child1 = undefined;
+    this.child2 = undefined;
 }
 
-function makeDictOfFrequency(text) {
-    let dict_of_frequency = {};
+function makeFreq2Strs(text) {
+    // Сортировка подсчетом по частоте за O(n + k), где k - максимальная частота
+    let str2freq = {};
+    let max_freq = 0;
     for (let i = 0; i < text.length; i++) {
-        if (dict_of_frequency[text.charAt(i)] != undefined) {
-            dict_of_frequency[text.charAt(i)]++;
+        if (str2freq[text.charAt(i)] != undefined) {
+            str2freq[text.charAt(i)]++;
         } else {
-            dict_of_frequency[text.charAt(i)] = 1;
+            str2freq[text.charAt(i)] = 1;
+        }
+        if (str2freq[text.charAt(i)] > max_freq){
+            max_freq = str2freq[text.charAt(i)];
         }
     }
-    return dict_of_frequency
+
+    let freq2str = Array(max_freq+1);
+    for (str in str2freq) {
+        if (freq2str[str2freq[str]] == undefined)
+            freq2str[str2freq[str]] = Array();
+        freq2str[str2freq[str]].push(str)
+    }
+    return [freq2str, str2freq]
 }
 
-function makeCodeForTreeElements(parent_index, tree, tree_len) {
-    var first = true;
-    for (let j = 0; j < tree_len; j++) {
-        if (tree[j].parent == parent_index) {
-            if (first) {
-                first = false;
-                if (parent_index != null)
-                    tree[j].code = tree[parent_index].code + "0";
-                tree = makeCodeForTreeElements(j, tree, tree_len);
-            }
-            else {
-                tree[j].code = tree[parent_index].code + "1";
-                tree = makeCodeForTreeElements(j, tree, tree_len);
-                break;
-            }
-        }
+function makeCodeForTreeElements(parent) {
+    // Проход по дереву O(n).
+    if (parent.child1 != undefined) {
+        parent.child1.code = parent.code + "0";
+        makeCodeForTreeElements(parent.child1)
     }
-    return tree;
+    if (parent.child2 != undefined) {
+        parent.child2.code = parent.code + "1";
+        makeCodeForTreeElements(parent.child2)
+    }
 }
 
 function makeLetter2CodeTable(tree, tree_length) {
@@ -74,34 +78,66 @@ function makeDictionary(str, mode) {
     return dict;
 }
 
-function makeTree(leaves_count, min_freq, tree) {
-    // Получает дерево из листьев и выстраивает по ним полноценное дерево.
-    for (let i = 0; i < leaves_count - 1; i++) {
-        let min_index1 = -1;
-        let min_index2 = -1;
-        let min_freq1 = min_freq;
-        let min_freq2 = min_freq;
-        for (let j = 0; j < tree.length; j++) {
-            if (tree[j].used == false && tree[j].freq <= min_freq1) {
-                min_index2 = min_index1;
-                min_freq2 = min_freq1;
-                min_index1 = j;
-                min_freq1 = tree[j].freq;
-            }
-            else if (tree[j].used == false && tree[j].freq <= min_freq2) {
-                min_index2 = j;
-                min_freq2 = tree[j].freq;
-            }
-        }
-        tree.push(new HuffmanObject(
-            tree[min_index1].letter + tree[min_index2].letter, 
-            tree[min_index1].freq + tree[min_index2].freq));
-        tree[min_index1].used = true;
-        tree[min_index2].used = true;
-        tree[min_index1].parent = tree.length - 1;
-        tree[min_index2].parent = tree.length - 1;
+function getFreq(huffman_obj){
+    if (huffman_obj == undefined)
+        return Infinity
+    return huffman_obj.freq
+}
+
+function get2Min(a, b, c, d) {
+    let freq2obj = {};
+    let objs = [a, b, c, d];
+    for (let i = 0; i < objs.length; i++){
+        let obj = objs[i]
+        if (freq2obj[getFreq(obj)] == undefined)
+            freq2obj[getFreq(obj)] = [];
+        freq2obj[getFreq(obj)].push(obj);
     }
-    return tree;
+    let keys = Object.keys(freq2obj)
+    let minFreq = Math.min(...keys)
+    if (freq2obj[minFreq].length > 1) {
+        return [freq2obj[minFreq][0], freq2obj[minFreq][1]]
+    }
+    else {
+        let other_freq = [];
+        for (let i = 0; i < keys.length; i++) {
+            if (keys[i] != minFreq)
+                other_freq.push(keys[i]);
+        }
+        let minFreq2 = Math.min(...other_freq)
+        return [freq2obj[minFreq][0], freq2obj[minFreq2][0]]
+    }
+    
+
+}
+
+function makeTree(leaves_count, min_freq, tree) {
+    // Получает отсортированное дерево из листьев и выстраивает по ним полноценное дерево за O(n).
+    let tree2 = Array(leaves_count);
+    let j = 0;
+    let z = 0;
+    let i = 0;
+    while (i < leaves_count) {
+        let result = get2Min(tree[i], tree[i+1], tree2[j], tree2[j+1]);
+        let a = result[0];
+        let b = result[1];
+        if (a.letter.length == 1 && b.letter.length == 1){
+            i += 2;
+        }
+        else if (a.letter.length == 1 || b.letter.length == 1){
+            i++;
+            j++;
+        }
+        else {
+            j += 2;
+        }
+        tree2[z] = new HuffmanObject(a.letter + b.letter, a.freq + b.freq);
+        tree2[z].child1 = a;
+        tree2[z].child2 = b;
+        z++;
+    }
+    tree2.pop()
+    return [...tree, ...tree2];
 }
 
 function code(text_file, table_file) {
@@ -109,18 +145,27 @@ function code(text_file, table_file) {
     if (text == undefined || text == "")
         return undefined;
 
-    dict_of_frequency = makeDictOfFrequency(text);
-    let tree = Array()
-    for (key in dict_of_frequency) {
-        var new_instance = new HuffmanObject(key, dict_of_frequency[key], "");
-        tree.push(new_instance);
+    let freq2Strs_and_reverse = makeFreq2Strs(text);
+    let freq2Strs = freq2Strs_and_reverse[0];
+    let str2freq = freq2Strs_and_reverse[1];
+    let tree = Array(str2freq.length);
+    let i = 0;
+    for (freq in freq2Strs) {
+        freq = parseInt(freq);
+        let len = freq2Strs[freq].length
+        for (let j = 0; j < len; j++){
+            let str = freq2Strs[freq][j]
+            let new_instance = new HuffmanObject(str, freq, "");
+            tree[i] = new_instance;
+            i++;
+        }
     }
 
     let text_len = text.length;
     let letters_count = tree.length;
 
     tree = makeTree(tree.length, text_len, tree);
-    tree = makeCodeForTreeElements(null, tree, tree.length);
+    makeCodeForTreeElements(tree[tree.length - 1]);
     let table_as_str = makeLetter2CodeTable(tree, letters_count);
     fs.writeFileSync(table_file, table_as_str);
     let result = "";
